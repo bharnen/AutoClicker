@@ -1,0 +1,143 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="AutoClicker.MainPage"
+             xmlns:localBehaviors="clr-namespace:AutoClicker.Resources.Behaviors"
+             xmlns:local="clr-namespace:AutoClicker"
+             x:DataType="local:MainPage">
+
+    <ScrollView Padding="0,30">
+        <VerticalStackLayout
+            Padding="30,0"
+            Spacing="10">
+            <Label
+                Text="Auto-Clicker"
+                TextDecorations="Underline"
+                Style="{StaticResource Headline}"
+                Margin="0,20"
+                SemanticProperties.HeadingLevel="Level1"
+                HorizontalTextAlignment="Center" />
+
+            <Label
+                Text="Time Between Clicks (ms):"
+                FontSize="20"
+                FontAttributes="Bold"
+                HorizontalTextAlignment="Start" />
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="15">
+                <VerticalStackLayout Grid.Column="0" Spacing="10">
+                    <Label
+                        Text="Minimum"
+                        FontAttributes="Bold" />
+                    <Entry
+                        x:Name="MinimumEntry"
+                        Placeholder="Enter minimum"
+                        Keyboard="Numeric"
+                        HorizontalOptions="Fill">
+                        <Entry.Behaviors>
+                            <localBehaviors:NumericEntryBehavior />
+                        </Entry.Behaviors>
+                    </Entry>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="1" Spacing="10">
+                    <Label
+                        Text="Maximum"
+                        FontAttributes="Bold" />
+                    <Entry
+                        x:Name="MaximumEntry"
+                        Placeholder="Enter maximum"
+                        Keyboard="Numeric"
+                        HorizontalOptions="Fill">
+                        <Entry.Behaviors>
+                            <localBehaviors:NumericEntryBehavior />
+                        </Entry.Behaviors>
+                    </Entry>
+                </VerticalStackLayout>
+            </Grid>
+
+
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="30" Padding="5,10" HorizontalOptions="Center">
+                <RadioButton x:Name="SlowRadio" Grid.Column="0" Content="Slow"
+                 MinimumWidthRequest="80"
+                 GroupName="SpeedOptions"
+                 Style="{StaticResource MinimalRadioStyle}" />
+
+                <RadioButton x:Name="MediumRadio" Grid.Column="1" Content="Medium"
+                 MinimumWidthRequest="80"
+                 GroupName="SpeedOptions"
+                 Style="{StaticResource MinimalRadioStyle}" />
+
+                <RadioButton x:Name="FastRadio" Grid.Column="2" Content="Fast"
+                 MinimumWidthRequest="80"
+                 GroupName="SpeedOptions"
+                 Style="{StaticResource MinimalRadioStyle}" />
+            </Grid>
+
+
+            <HorizontalStackLayout HorizontalOptions="Center" Margin="0,0,0,10">
+                <CheckBox x:Name="DoubleClickCheckBox"
+                    IsChecked="False"
+                    VerticalOptions="Center" />
+                <Label Text="Double Click"
+                    VerticalOptions="Center"
+                    FontSize="16"
+                    TextColor="Black" />
+            </HorizontalStackLayout>
+
+            <Label x:Name="ClickTestLabel"
+                Text="0"
+                Margin="0,0,0,20"
+                FontSize="30"
+                HorizontalOptions="Center"
+                TextColor="Black"/>
+
+            <Button
+                Text="Test"
+                Padding="60,20"
+                HorizontalOptions="Center"
+                VerticalOptions="Center"
+                BackgroundColor="#66CCFF"   
+                TextColor="Black"
+                CornerRadius="8"
+                Clicked="OnTestButtonClicked" />
+            <Button
+                Text="Reset"
+                HorizontalOptions="Center"
+                VerticalOptions="Center"
+                BackgroundColor="#FDD835"   
+                TextColor="Black"
+                CornerRadius="8"
+                Clicked="OnResetButtonClicked" />
+
+
+
+
+            <HorizontalStackLayout Spacing="15" Margin="0,25" HorizontalOptions="Center">
+                <Button
+                    x:Name="StartButton"
+                    Text="Start (+)"
+                    Clicked="OnStartClicked"
+                    HorizontalOptions="Fill" 
+                    BackgroundColor="ForestGreen"
+                    TextColor="White"
+                    TextTransform="Uppercase"
+                    FontAttributes="Bold"
+                    BorderWidth="3"
+                    BorderColor="{Binding IsClicking, Converter={StaticResource BoolToColorConverter}}" />
+                <Button
+                    x:Name="StopButton"
+                    Text="Stop (-)"
+                    Clicked="OnStopClicked"
+                    HorizontalOptions="Fill" 
+                    BackgroundColor="DarkRed"
+                    TextColor="White"
+                    TextTransform="Uppercase"
+                    FontAttributes="Bold"
+                    BorderWidth="3"
+                    BorderColor="{Binding IsClicking, Converter={StaticResource InverseBoolToColorConverter}}" />
+            </HorizontalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

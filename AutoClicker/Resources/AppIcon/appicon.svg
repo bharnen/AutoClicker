@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512"
+     xmlns="http://www.w3.org/2000/svg">
+
+	<!-- Background circle for emphasis -->
+	<circle cx="256" cy="256" r="240" fill="#111111"/>
+
+	<!-- Burst lines -->
+	<g stroke="#00e5ff" stroke-width="12" stroke-linecap="round">
+		<line x1="256" y1="40" x2="256" y2="100"/>
+		<line x1="256" y1="412" x2="256" y2="472"/>
+		<line x1="40" y1="256" x2="100" y2="256"/>
+		<line x1="412" y1="256" x2="472" y2="256"/>
+		<line x1="96" y1="96" x2="136" y2="136"/>
+		<line x1="376" y1="376" x2="416" y2="416"/>
+		<line x1="96" y1="416" x2="136" y2="376"/>
+		<line x1="376" y1="136" x2="416" y2="96"/>
+	</g>
+
+	<!-- Cursor shape -->
+	<path d="M 140 120 L 360 240 L 240 280 L 280 420 L 200 440 L 160 300 L 80 340 Z"
+		  fill="#ffffff"
+		  stroke="#00e5ff"
+		  stroke-width="16"
+		  stroke-linejoin="round"/>
+
+	<!-- Accent overlay for “glorified” look -->
+	<path d="M 140 120 L 360 240 L 240 280 L 280 420 L 200 440 L 160 300 L 80 340 Z"
+		  fill="none"
+		  stroke="#ff2bdc"
+		  stroke-width="6"
+		  stroke-linejoin="round"/>
+</svg>
