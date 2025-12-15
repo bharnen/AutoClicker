@@ -4,7 +4,38 @@
              x:Class="AutoClicker.MainPage"
              xmlns:localBehaviors="clr-namespace:AutoClicker.Resources.Behaviors"
              xmlns:local="clr-namespace:AutoClicker"
-             x:DataType="local:MainPage">
+             x:DataType="local:MainPage"
+             BackgroundColor="{AppThemeBinding Light=#F5F5F5, Dark=#4a5859}">
+
+    <ContentPage.Resources>
+        <Style TargetType="Button">
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PrimaryDarkText}}" />
+            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+            <Setter Property="BorderColor" Value="{AppThemeBinding Light=#3d1a7a, Dark=#313022}" />
+            <Setter Property="FontFamily" Value="OpenSansRegular"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="BorderWidth" Value="2"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="MinimumHeightRequest" Value="44"/>
+            <Setter Property="MinimumWidthRequest" Value="44"/>
+            <Setter Property="VisualStateManager.VisualStateGroups">
+                <VisualStateGroupList>
+                    <VisualStateGroup x:Name="CommonStates">
+                        <VisualState x:Name="Normal" />
+                        <VisualState x:Name="Disabled">
+                            <VisualState.Setters>
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray200}}" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}" />
+                                <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray500}}" />
+                            </VisualState.Setters>
+                        </VisualState>
+                        <VisualState x:Name="PointerOver" />
+                    </VisualStateGroup>
+                </VisualStateGroupList>
+            </Setter>
+        </Style>
+    </ContentPage.Resources>
 
     <ScrollView Padding="0,30">
         <VerticalStackLayout
@@ -26,9 +57,17 @@
 
             <Grid ColumnDefinitions="*,*" ColumnSpacing="15">
                 <VerticalStackLayout Grid.Column="0" Spacing="10">
-                    <Label
-                        Text="Minimum"
-                        FontAttributes="Bold" />
+                    <HorizontalStackLayout Spacing="5" VerticalOptions="Center">
+                        <Label
+                            Text="Minimum"
+                            FontAttributes="Bold" />
+                        <Label
+                            x:Name="MinimumSecondsLabel"
+                            Text="0 (s)"
+                            FontAttributes="Bold"
+                            TextColor="{AppThemeBinding Light=#666666, Dark=#CCCCCC}"
+                            FontSize="12" />
+                    </HorizontalStackLayout>
                     <Entry
                         x:Name="MinimumEntry"
                         Placeholder="Enter minimum"
@@ -41,9 +80,17 @@
                 </VerticalStackLayout>
 
                 <VerticalStackLayout Grid.Column="1" Spacing="10">
-                    <Label
-                        Text="Maximum"
-                        FontAttributes="Bold" />
+                    <HorizontalStackLayout Spacing="5" VerticalOptions="Center">
+                        <Label
+                            Text="Maximum"
+                            FontAttributes="Bold" />
+                        <Label
+                            x:Name="MaximumSecondsLabel"
+                            Text="0 (s)"
+                            FontAttributes="Bold"
+                            TextColor="{AppThemeBinding Light=#666666, Dark=#CCCCCC}"
+                            FontSize="12" />
+                    </HorizontalStackLayout>
                     <Entry
                         x:Name="MaximumEntry"
                         Placeholder="Enter maximum"
@@ -82,7 +129,7 @@
                 <Label Text="Double Click"
                     VerticalOptions="Center"
                     FontSize="16"
-                    TextColor="Black" />
+                    TextColor="{AppThemeBinding Light=Black, Dark=White}" />
             </HorizontalStackLayout>
 
             <Label x:Name="ClickTestLabel"
@@ -90,7 +137,7 @@
                 Margin="0,0,0,20"
                 FontSize="30"
                 HorizontalOptions="Center"
-                TextColor="Black"/>
+                TextColor="{AppThemeBinding Light=Black, Dark=White}"/>
 
             <Button
                 Text="Test"
@@ -116,25 +163,25 @@
             <HorizontalStackLayout Spacing="15" Margin="0,25" HorizontalOptions="Center">
                 <Button
                     x:Name="StartButton"
-                    Text="Start (+)"
+                    Text="Start (Ctrl+S)"
                     Clicked="OnStartClicked"
                     HorizontalOptions="Fill" 
                     BackgroundColor="ForestGreen"
                     TextColor="White"
                     TextTransform="Uppercase"
                     FontAttributes="Bold"
-                    BorderWidth="3"
+                    BorderWidth="{Binding IsClicking, Converter={StaticResource BoolToBorderWidthConverter}}"
                     BorderColor="{Binding IsClicking, Converter={StaticResource BoolToColorConverter}}" />
                 <Button
                     x:Name="StopButton"
-                    Text="Stop (-)"
+                    Text="Stop (Ctrl+S)"
                     Clicked="OnStopClicked"
                     HorizontalOptions="Fill" 
                     BackgroundColor="DarkRed"
                     TextColor="White"
                     TextTransform="Uppercase"
                     FontAttributes="Bold"
-                    BorderWidth="3"
+                    BorderWidth="{Binding IsClicking, Converter={StaticResource InverseBoolToBorderWidthConverter}}"
                     BorderColor="{Binding IsClicking, Converter={StaticResource InverseBoolToColorConverter}}" />
             </HorizontalStackLayout>
         </VerticalStackLayout>
