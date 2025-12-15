@@ -8,7 +8,6 @@ namespace AutoClicker.Resources.Behaviors
     {
         private bool _isProcessing = false;
         private string _lastProcessedText = string.Empty;
-        private int _lastCursorPosition = 0;
 
         protected override void OnAttachedTo(Entry entry)
         {
