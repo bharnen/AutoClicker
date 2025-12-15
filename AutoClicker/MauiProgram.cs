@@ -15,6 +15,14 @@ namespace AutoClicker
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 });
 
+#if WINDOWS
+            // Register optimized Entry handler for Windows
+            builder.ConfigureMauiHandlers(handlers =>
+            {
+                handlers.AddHandler<Microsoft.Maui.Controls.Entry, Platforms.Windows.OptimizedEntryHandler>();
+            });
+#endif
+
 #if DEBUG
     		builder.Logging.AddDebug();
 #endif

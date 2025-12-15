@@ -7,10 +7,13 @@ namespace AutoClicker.Resources.Converters
 {
     public class BoolToColor : IValueConverter
     {
+        private static readonly Color ActiveColor = Colors.Black;
+        private static readonly Color InactiveColor = Color.FromArgb("#313022");
+
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
             if (value is bool isClicking)
-                return isClicking ? Colors.Black : Color.FromArgb("#313022");
+                return isClicking ? ActiveColor : InactiveColor;
             return Colors.Transparent;
         }
 
@@ -20,10 +23,13 @@ namespace AutoClicker.Resources.Converters
 
     public class InverseBoolToColorConverter : IValueConverter
     {
+        private static readonly Color ActiveColor = Colors.Black;
+        private static readonly Color InactiveColor = Color.FromArgb("#313022");
+
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
             if (value is bool isClicking)
-                return !isClicking ? Colors.Black : Color.FromArgb("#313022"); 
+                return !isClicking ? ActiveColor : InactiveColor; 
             return Colors.Transparent;
         }
 

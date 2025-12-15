@@ -7,10 +7,19 @@ namespace AutoClicker
     {
         private CancellationTokenSource? _cancellationTokenSource;
         private Task? _clickingTask;
-        private Random _random = new Random();
+        private Random _random = Random.Shared;
         private Dictionary<Guid, Tuple<double, double>> SpeedOptions = new Dictionary<Guid, Tuple<double, double>>();
         int clickTestAmount = 0;
         private bool _isClicking;
+        private bool _isUpdatingLabels = false;
+        private CancellationTokenSource? _debounceTokenSource;
+        private string _lastMinimumLabelText = string.Empty;
+        private string _lastMaximumLabelText = string.Empty;
+
+#if WINDOWS
+        private Platforms.Windows.HotkeyManager? _hotkeyManager;
+#endif
+        
         public bool IsClicking
         {
             get => _isClicking;
@@ -19,7 +28,7 @@ namespace AutoClicker
                 if (_isClicking != value)
                 {
                     _isClicking = value;
-                    OnPropertyChanged(); // notify binding system
+                    OnPropertyChanged();
                 }
             }
         }
@@ -28,36 +37,8 @@ namespace AutoClicker
         [DllImport("user32.dll", SetLastError = true)]
         private static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint cButtons, uint dwExtraInfo);
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern bool UnhookWindowsHookEx(IntPtr hhk);
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern IntPtr GetModuleHandle(string lpModuleName);
-
-        [DllImport("user32.dll")]
-        private static extern short GetKeyState(int nVirtKey);
-
-        private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
-
-        private const int WH_KEYBOARD_LL = 13;
-        private const int WM_KEYDOWN = 0x0100;
-        private const int WM_KEYUP = 0x0101;
         private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
         private const uint MOUSEEVENTF_LEFTUP = 0x0004;
-        private const int VK_S = 0x53;
-        private const int VK_CONTROL = 0x11;
-        private const int VK_LCONTROL = 0xA2;
-        private const int VK_RCONTROL = 0xA3;
-
-        private IntPtr _hookId = IntPtr.Zero;
-        private readonly LowLevelKeyboardProc _hookProc;
-        private bool _ctrlSPressed = false;
 #endif
 
         public MainPage()
@@ -69,77 +50,140 @@ namespace AutoClicker
             FastRadio.CheckedChanged += OnRadioCheckedChanged;
             SpeedOptions.Add(SlowRadio.Id, new Tuple<double, double>(27500, 57900));
             SpeedOptions.Add(MediumRadio.Id, new Tuple<double, double>(880, 1450));
-            SpeedOptions.Add(FastRadio.Id, new Tuple<double, double>(85, 220));
+            SpeedOptions.Add(FastRadio.Id, new Tuple<double, double>(110, 180));
 
             MediumRadio.IsChecked = true;
-            
-            // Apply current system theme immediately
-            ApplySystemTheme();
-            
-            // Listen for future theme changes
-            Application.Current!.RequestedThemeChanged += OnRequestedThemeChanged;
+
+            MinimumEntry.TextChanged += OnEntryTextChanged;
+            MaximumEntry.TextChanged += OnEntryTextChanged;
 
 #if WINDOWS
-            _hookProc = HookCallback;
-            SetupKeyboardHook();
+            Loaded += OnPageLoaded;
+            Unloaded += OnPageUnloaded;
+#endif
+        }
+
+#if WINDOWS
+        private void OnPageLoaded(object? sender, EventArgs e)
+        {
+            // Register Ctrl+S hotkey
+            if (Window?.Handler?.PlatformView is Microsoft.UI.Xaml.Window window)
+            {
+                _hotkeyManager = new Platforms.Windows.HotkeyManager();
+                _hotkeyManager.RegisterCtrlSHotkey(window, OnHotkeyPressed);
+            }
+        }
+
+        private void OnPageUnloaded(object? sender, EventArgs e)
+        {
+            _hotkeyManager?.Dispose();
+            _hotkeyManager = null;
+        }
+
+        private void OnHotkeyPressed()
+        {
+            // Toggle clicking state
+            if (IsClicking)
+                OnStopClicked(null, EventArgs.Empty);
+            else
+                OnStartClicked(null, EventArgs.Empty);
+        }
 #endif
 
-            MinimumEntry.TextChanged += (s, e) => UpdateSecondsLabels();
-            MaximumEntry.TextChanged += (s, e) => UpdateSecondsLabels();
-        }
-
-        private void ApplySystemTheme()
+        private void OnEntryTextChanged(object? sender, TextChangedEventArgs e)
         {
-            // Get the current system theme and apply it
-            var currentTheme = Application.Current?.RequestedTheme ?? AppTheme.Light;
-            Application.Current!.UserAppTheme = currentTheme;
-        }
-
-        private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e)
-        {
-            // MAUI automatically updates AppThemeBinding values
-            // This event fires when the system theme changes
-            System.Diagnostics.Debug.WriteLine($"Theme changed to: {e.RequestedTheme}");
-            Application.Current!.UserAppTheme = e.RequestedTheme;
+            // Only update if text actually changed, not just selection
+            if (e.NewTextValue != e.OldTextValue)
+            {
+                UpdateSecondsLabelsDebounced();
+            }
         }
 
         private void OnRadioCheckedChanged(object? sender, CheckedChangedEventArgs e)
         {
             if (sender == null) return;
             var radio = (RadioButton)sender;
-            if (e.Value) // true when this one is checked
+            if (e.Value)
             {
-
-                MinimumEntry.SetValue(Entry.TextProperty, SpeedOptions[radio.Id].Item1);
-                MaximumEntry.SetValue(Entry.TextProperty, SpeedOptions[radio.Id].Item2);
-                
-                // Update the seconds labels
+                MinimumEntry.Text = SpeedOptions[radio.Id].Item1.ToString();
+                MaximumEntry.Text = SpeedOptions[radio.Id].Item2.ToString();
                 UpdateSecondsLabels();
+            }
+        }
+
+        private async void UpdateSecondsLabelsDebounced()
+        {
+            // Cancel any pending update
+            _debounceTokenSource?.Cancel();
+            _debounceTokenSource = new CancellationTokenSource();
+            var token = _debounceTokenSource.Token;
+
+            try
+            {
+                // Wait 150ms before updating (debounce)
+                await Task.Delay(150, token);
+                
+                if (!token.IsCancellationRequested)
+                {
+                    UpdateSecondsLabels();
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                // Expected when debouncing
             }
         }
 
         private void UpdateSecondsLabels()
         {
-            // Update Minimum seconds label
-            if (double.TryParse(MinimumEntry.Text, out double minimum))
+            // Prevent concurrent updates
+            if (_isUpdatingLabels) return;
+            
+            _isUpdatingLabels = true;
+            
+            try
             {
-                double minimumSeconds = minimum / 1000.0;
-                MinimumSecondsLabel.Text = $"{minimumSeconds:F2} (s)";
-            }
-            else
-            {
-                MinimumSecondsLabel.Text = "0 (s)";
-            }
+                // Update Minimum seconds label
+                string newMinimumText;
+                if (double.TryParse(MinimumEntry.Text, out double minimum))
+                {
+                    double minimumSeconds = minimum / 1000.0;
+                    newMinimumText = $"{minimumSeconds:F2} (s)";
+                }
+                else
+                {
+                    newMinimumText = "0 (s)";
+                }
 
-            // Update Maximum seconds label
-            if (double.TryParse(MaximumEntry.Text, out double maximum))
-            {
-                double maximumSeconds = maximum / 1000.0;
-                MaximumSecondsLabel.Text = $"{maximumSeconds:F2} (s)";
+                // Only update if changed
+                if (_lastMinimumLabelText != newMinimumText)
+                {
+                    MinimumSecondsLabel.Text = newMinimumText;
+                    _lastMinimumLabelText = newMinimumText;
+                }
+
+                // Update Maximum seconds label
+                string newMaximumText;
+                if (double.TryParse(MaximumEntry.Text, out double maximum))
+                {
+                    double maximumSeconds = maximum / 1000.0;
+                    newMaximumText = $"{maximumSeconds:F2} (s)";
+                }
+                else
+                {
+                    newMaximumText = "0 (s)";
+                }
+
+                // Only update if changed
+                if (_lastMaximumLabelText != newMaximumText)
+                {
+                    MaximumSecondsLabel.Text = newMaximumText;
+                    _lastMaximumLabelText = newMaximumText;
+                }
             }
-            else
+            finally
             {
-                MaximumSecondsLabel.Text = "0 (s)";
+                _isUpdatingLabels = false;
             }
         }
 
@@ -154,56 +198,6 @@ namespace AutoClicker
             clickTestAmount = 0;
             ClickTestLabel.Text = $"{clickTestAmount}";
         }
-        
-#if WINDOWS
-        private void SetupKeyboardHook()
-        {
-            using (var curProcess = System.Diagnostics.Process.GetCurrentProcess())
-            using (var curModule = curProcess.MainModule)
-            {
-                _hookId = SetWindowsHookEx(WH_KEYBOARD_LL, _hookProc, GetModuleHandle(curModule!.ModuleName), 0);
-            }
-        }
-
-        private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
-        {
-            try
-            {
-                if (nCode >= 0)
-                {
-                    int vkCode = Marshal.ReadInt32(lParam);
-                    
-                    // Check for key down
-                    if (wParam == (IntPtr)WM_KEYDOWN && vkCode == VK_S)
-                    {
-                        bool ctrlPressed = (GetKeyState(VK_LCONTROL) & 0x8000) != 0 || (GetKeyState(VK_RCONTROL) & 0x8000) != 0;
-                        
-                        if (ctrlPressed && !_ctrlSPressed)
-                        {
-                            _ctrlSPressed = true;
-                            
-                            // Toggle between start and stop
-                            if (IsClicking)
-                                MainThread.BeginInvokeOnMainThread(() => OnStopClicked(null, EventArgs.Empty));
-                            else
-                                MainThread.BeginInvokeOnMainThread(() => OnStartClicked(null, EventArgs.Empty));
-                        }
-                    }
-                    // Check for S key release
-                    else if (wParam == (IntPtr)WM_KEYUP && vkCode == VK_S)
-                    {
-                        _ctrlSPressed = false;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Hook error: {ex}");
-            }
-            return CallNextHookEx(_hookId, nCode, wParam, lParam);
-        }
-
-#endif
 
         private async void OnStartClicked(object? sender, EventArgs e)
         {
@@ -289,21 +283,11 @@ namespace AutoClicker
             mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
             if (DoubleClickCheckBox.IsChecked)
             {
-                await Task.Delay(_random.Next(65, 125));
+                await Task.Delay(_random.Next(40, 80));
                 mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
                 mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
             }
 #endif
         }
-
-#if WINDOWS
-        ~MainPage()
-        {
-            if (_hookId != IntPtr.Zero)
-            {
-                UnhookWindowsHookEx(_hookId);
-            }
-        }
-#endif
     }
 }
