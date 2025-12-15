@@ -40,22 +40,28 @@ namespace AutoClicker
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern IntPtr GetModuleHandle(string lpModuleName);
 
+        [DllImport("user32.dll")]
+        private static extern short GetKeyState(int nVirtKey);
+
         private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
         private const int WH_KEYBOARD_LL = 13;
         private const int WM_KEYDOWN = 0x0100;
+        private const int WM_KEYUP = 0x0101;
         private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
         private const uint MOUSEEVENTF_LEFTUP = 0x0004;
-        private const int VK_ADD = 0x6B;
-        private const int VK_SUBTRACT = 0x6D;
+        private const int VK_S = 0x53;
+        private const int VK_CONTROL = 0x11;
+        private const int VK_LCONTROL = 0xA2;
+        private const int VK_RCONTROL = 0xA3;
 
         private IntPtr _hookId = IntPtr.Zero;
         private readonly LowLevelKeyboardProc _hookProc;
+        private bool _ctrlSPressed = false;
 #endif
 
         public MainPage()
         {
-
             InitializeComponent();
             BindingContext = this;
             SlowRadio.CheckedChanged += OnRadioCheckedChanged;
@@ -66,10 +72,35 @@ namespace AutoClicker
             SpeedOptions.Add(FastRadio.Id, new Tuple<double, double>(85, 220));
 
             MediumRadio.IsChecked = true;
+            
+            // Apply current system theme immediately
+            ApplySystemTheme();
+            
+            // Listen for future theme changes
+            Application.Current!.RequestedThemeChanged += OnRequestedThemeChanged;
+
 #if WINDOWS
             _hookProc = HookCallback;
             SetupKeyboardHook();
 #endif
+
+            MinimumEntry.TextChanged += (s, e) => UpdateSecondsLabels();
+            MaximumEntry.TextChanged += (s, e) => UpdateSecondsLabels();
+        }
+
+        private void ApplySystemTheme()
+        {
+            // Get the current system theme and apply it
+            var currentTheme = Application.Current?.RequestedTheme ?? AppTheme.Light;
+            Application.Current!.UserAppTheme = currentTheme;
+        }
+
+        private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e)
+        {
+            // MAUI automatically updates AppThemeBinding values
+            // This event fires when the system theme changes
+            System.Diagnostics.Debug.WriteLine($"Theme changed to: {e.RequestedTheme}");
+            Application.Current!.UserAppTheme = e.RequestedTheme;
         }
 
         private void OnRadioCheckedChanged(object? sender, CheckedChangedEventArgs e)
@@ -81,8 +112,37 @@ namespace AutoClicker
 
                 MinimumEntry.SetValue(Entry.TextProperty, SpeedOptions[radio.Id].Item1);
                 MaximumEntry.SetValue(Entry.TextProperty, SpeedOptions[radio.Id].Item2);
+                
+                // Update the seconds labels
+                UpdateSecondsLabels();
             }
         }
+
+        private void UpdateSecondsLabels()
+        {
+            // Update Minimum seconds label
+            if (double.TryParse(MinimumEntry.Text, out double minimum))
+            {
+                double minimumSeconds = minimum / 1000.0;
+                MinimumSecondsLabel.Text = $"{minimumSeconds:F2} (s)";
+            }
+            else
+            {
+                MinimumSecondsLabel.Text = "0 (s)";
+            }
+
+            // Update Maximum seconds label
+            if (double.TryParse(MaximumEntry.Text, out double maximum))
+            {
+                double maximumSeconds = maximum / 1000.0;
+                MaximumSecondsLabel.Text = $"{maximumSeconds:F2} (s)";
+            }
+            else
+            {
+                MaximumSecondsLabel.Text = "0 (s)";
+            }
+        }
+
         private void OnTestButtonClicked(object sender, EventArgs e)
         {
             clickTestAmount++;
@@ -109,13 +169,31 @@ namespace AutoClicker
         {
             try
             {
-                if (nCode >= 0 && wParam == (IntPtr)WM_KEYDOWN)
+                if (nCode >= 0)
                 {
                     int vkCode = Marshal.ReadInt32(lParam);
-                    if (vkCode == VK_ADD)
-                        MainThread.BeginInvokeOnMainThread(() => OnStartClicked(null, EventArgs.Empty));
-                    else if (vkCode == VK_SUBTRACT)
-                        MainThread.BeginInvokeOnMainThread(() => OnStopClicked(null, EventArgs.Empty));
+                    
+                    // Check for key down
+                    if (wParam == (IntPtr)WM_KEYDOWN && vkCode == VK_S)
+                    {
+                        bool ctrlPressed = (GetKeyState(VK_LCONTROL) & 0x8000) != 0 || (GetKeyState(VK_RCONTROL) & 0x8000) != 0;
+                        
+                        if (ctrlPressed && !_ctrlSPressed)
+                        {
+                            _ctrlSPressed = true;
+                            
+                            // Toggle between start and stop
+                            if (IsClicking)
+                                MainThread.BeginInvokeOnMainThread(() => OnStopClicked(null, EventArgs.Empty));
+                            else
+                                MainThread.BeginInvokeOnMainThread(() => OnStartClicked(null, EventArgs.Empty));
+                        }
+                    }
+                    // Check for S key release
+                    else if (wParam == (IntPtr)WM_KEYUP && vkCode == VK_S)
+                    {
+                        _ctrlSPressed = false;
+                    }
                 }
             }
             catch (Exception ex)
