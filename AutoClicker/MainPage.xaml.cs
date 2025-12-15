@@ -8,13 +8,16 @@ namespace AutoClicker
         private CancellationTokenSource? _cancellationTokenSource;
         private Task? _clickingTask;
         private Random _random = Random.Shared;
-        private Dictionary<Guid, Tuple<double, double>> SpeedOptions = new Dictionary<Guid, Tuple<double, double>>();
         int clickTestAmount = 0;
         private bool _isClicking;
         private bool _isUpdatingLabels = false;
         private CancellationTokenSource? _debounceTokenSource;
         private string _lastMinimumLabelText = string.Empty;
         private string _lastMaximumLabelText = string.Empty;
+        
+        // Cache parsed values to avoid UI thread access from background
+        private volatile int _cachedMinimum = 880;
+        private volatile int _cachedMaximum = 1450;
 
 #if WINDOWS
         private Platforms.Windows.HotkeyManager? _hotkeyManager;
@@ -48,9 +51,6 @@ namespace AutoClicker
             SlowRadio.CheckedChanged += OnRadioCheckedChanged;
             MediumRadio.CheckedChanged += OnRadioCheckedChanged;
             FastRadio.CheckedChanged += OnRadioCheckedChanged;
-            SpeedOptions.Add(SlowRadio.Id, new Tuple<double, double>(27500, 57900));
-            SpeedOptions.Add(MediumRadio.Id, new Tuple<double, double>(880, 1450));
-            SpeedOptions.Add(FastRadio.Id, new Tuple<double, double>(110, 180));
 
             MediumRadio.IsChecked = true;
 
@@ -95,20 +95,45 @@ namespace AutoClicker
             // Only update if text actually changed, not just selection
             if (e.NewTextValue != e.OldTextValue)
             {
+                // Update cached values for background thread access
+                if (sender == MinimumEntry && int.TryParse(e.NewTextValue, out int min))
+                {
+                    _cachedMinimum = min;
+                }
+                else if (sender == MaximumEntry && int.TryParse(e.NewTextValue, out int max))
+                {
+                    _cachedMaximum = max;
+                }
+                
                 UpdateSecondsLabelsDebounced();
             }
         }
 
         private void OnRadioCheckedChanged(object? sender, CheckedChangedEventArgs e)
         {
-            if (sender == null) return;
+            if (sender == null || !e.Value) return;
+            
             var radio = (RadioButton)sender;
-            if (e.Value)
-            {
-                MinimumEntry.Text = SpeedOptions[radio.Id].Item1.ToString();
-                MaximumEntry.Text = SpeedOptions[radio.Id].Item2.ToString();
-                UpdateSecondsLabels();
-            }
+            
+            // Direct object reference comparison - fastest possible approach
+            (int min, int max) = GetSpeedRange(radio);
+            
+            MinimumEntry.Text = min.ToString();
+            MaximumEntry.Text = max.ToString();
+            UpdateSecondsLabels();
+        }
+
+        private (int min, int max) GetSpeedRange(RadioButton radio)
+        {
+            // Compare RadioButton object references directly
+            if (ReferenceEquals(radio, SlowRadio))
+                return (27500, 57900);
+            else if (ReferenceEquals(radio, MediumRadio))
+                return (880, 1450);
+            else if (ReferenceEquals(radio, FastRadio))
+                return (110, 180);
+            
+            return (880, 1450); // Default to Medium
         }
 
         private async void UpdateSecondsLabelsDebounced()
@@ -148,11 +173,12 @@ namespace AutoClicker
                 if (double.TryParse(MinimumEntry.Text, out double minimum))
                 {
                     double minimumSeconds = minimum / 1000.0;
-                    newMinimumText = $"{minimumSeconds:F2} (s)";
+                    // Use string.Create for allocation-efficient formatting
+                    newMinimumText = string.Create(null, stackalloc char[32], $"{minimumSeconds:F2} (s)");
                 }
                 else
                 {
-                    newMinimumText = "0 (s)";
+                    newMinimumText = "0.00 (s)";
                 }
 
                 // Only update if changed
@@ -167,11 +193,12 @@ namespace AutoClicker
                 if (double.TryParse(MaximumEntry.Text, out double maximum))
                 {
                     double maximumSeconds = maximum / 1000.0;
-                    newMaximumText = $"{maximumSeconds:F2} (s)";
+                    // Use string.Create for allocation-efficient formatting
+                    newMaximumText = string.Create(null, stackalloc char[32], $"{maximumSeconds:F2} (s)");
                 }
                 else
                 {
-                    newMaximumText = "0 (s)";
+                    newMaximumText = "0.00 (s)";
                 }
 
                 // Only update if changed
@@ -190,13 +217,15 @@ namespace AutoClicker
         private void OnTestButtonClicked(object sender, EventArgs e)
         {
             clickTestAmount++;
-            ClickTestLabel.Text = $"{clickTestAmount}";
+            // Use ToString() to avoid boxing allocation
+            ClickTestLabel.Text = clickTestAmount.ToString();
         }
 
         private void OnResetButtonClicked(object sender, EventArgs e)
         {
             clickTestAmount = 0;
-            ClickTestLabel.Text = $"{clickTestAmount}";
+            // Pre-cached common value
+            ClickTestLabel.Text = "0";
         }
 
         private async void OnStartClicked(object? sender, EventArgs e)
@@ -224,6 +253,10 @@ namespace AutoClicker
                 return;
             }
 
+            // Cache initial values before starting background task
+            _cachedMinimum = (int)minimum;
+            _cachedMaximum = (int)maximum;
+
             IsClicking = true;
             _cancellationTokenSource = new CancellationTokenSource();
             StartButton.IsEnabled = false;
@@ -233,12 +266,13 @@ namespace AutoClicker
             {
                 while (!_cancellationTokenSource.Token.IsCancellationRequested)
                 {
-                    if (!int.TryParse(MinimumEntry.Text, out int minimum) || !int.TryParse(MaximumEntry.Text, out int maximum))
-                    {
-                        continue;
-                    }
+                    // Use cached values instead of accessing UI properties
+                    int minimum = _cachedMinimum;
+                    int maximum = _cachedMaximum;
+                    
                     if (minimum < 0 || maximum < 0 || minimum > maximum)
                     {
+                        await Task.Delay(100, _cancellationTokenSource.Token);
                         continue;
                     }
 
